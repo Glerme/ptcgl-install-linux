@@ -18,11 +18,15 @@ install_proton_ge() {
 
     PROTON_VERSION=$(echo "$release_json" | jq -r '.tag_name') \
         || die "Failed to parse Proton-GE version from GitHub API response."
+    [[ -z "$PROTON_VERSION" || "$PROTON_VERSION" == "null" ]] \
+        && die "Unexpected .tag_name value from GitHub API: '${PROTON_VERSION}'"
     export PROTON_VERSION
 
     local tar_url
-    tar_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url') \
+    tar_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url' | head -1) \
         || die "Failed to find .tar.gz asset in Proton-GE release."
+    [[ -z "$tar_url" || "$tar_url" == "null" ]] \
+        && die "No .tar.gz download URL found in Proton-GE release assets."
 
     local proton_dir="${HEROIC_TOOLS}/${PROTON_VERSION}"
 
