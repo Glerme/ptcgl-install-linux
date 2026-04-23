@@ -38,12 +38,21 @@ else
 fi
 
 GAME_CONFIG_FILE="${HEROIC_GAMES_CONFIG}/${APP_NAME}.json"
-[[ -f "$GAME_CONFIG_FILE" ]] && rm -f "$GAME_CONFIG_FILE" && success "Removed ${GAME_CONFIG_FILE}"
+if [[ -f "$GAME_CONFIG_FILE" ]]; then
+    rm -f "$GAME_CONFIG_FILE"
+    success "Removed ${GAME_CONFIG_FILE}"
+fi
 
 # ── Remove URI handler ─────────────────────────────────────────────────────────
 step "Removing tpcitcgapp:// URI handler"
-[[ -f "$HANDLER_BIN" ]]     && rm -f "$HANDLER_BIN"     && success "Removed ${HANDLER_BIN}"
-[[ -f "$HANDLER_DESKTOP" ]] && rm -f "$HANDLER_DESKTOP" && success "Removed ${HANDLER_DESKTOP}"
+if [[ -f "$HANDLER_BIN" ]]; then
+    rm -f "$HANDLER_BIN"
+    success "Removed ${HANDLER_BIN}"
+fi
+if [[ -f "$HANDLER_DESKTOP" ]]; then
+    rm -f "$HANDLER_DESKTOP"
+    success "Removed ${HANDLER_DESKTOP}"
+fi
 
 if command -v update-desktop-database &>/dev/null; then
     update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
@@ -65,15 +74,20 @@ else
 fi
 
 # ── Remove state dir ───────────────────────────────────────────────────────────
-[[ -d "$STATE_DIR" ]] && rm -rf "$STATE_DIR" && success "State dir removed: ${STATE_DIR}"
+if [[ -d "$STATE_DIR" ]]; then
+    rm -rf "$STATE_DIR"
+    success "State dir removed: ${STATE_DIR}"
+fi
 
 # ── Optionally remove Heroic Flatpak ──────────────────────────────────────────
 echo ""
 read -rp "Remove Heroic Games Launcher Flatpak? [y/N] " ans
 if [[ "${ans,,}" =~ ^(y|yes)$ ]]; then
-    flatpak uninstall --user -y "$HEROIC_FLATPAK" 2>/dev/null \
-        && success "Heroic removed" \
-        || warn "Could not remove Heroic (may not be installed)"
+    if flatpak uninstall --user -y "$HEROIC_FLATPAK" 2>/dev/null; then
+        success "Heroic removed"
+    else
+        warn "Could not remove Heroic (may not be installed)"
+    fi
 fi
 
 echo ""
