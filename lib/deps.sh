@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs system dependencies: flatpak and jq.
 # Sourced by install.sh — do not call directly.
-# Expects: info(), warn(), die(), step(), require_cmd() from common.sh are already loaded.
+# Expects: success(), warn(), die(), step(), require_cmd() from common.sh are already loaded.
 
 # ── Detect package manager ─────────────────────────────────────────────────────
 _detect_pkg_manager() {
@@ -19,7 +19,7 @@ _install_pkg() {
     local mgr
     mgr=$(_detect_pkg_manager)
     case "$mgr" in
-        apt)    sudo apt-get install -y "$pkg" ;;
+        apt)    sudo apt-get update -qq && sudo apt-get install -y "$pkg" ;;
         dnf)    sudo dnf install -y "$pkg" ;;
         pacman) sudo pacman -S --noconfirm "$pkg" ;;
         zypper) sudo zypper install -y "$pkg" ;;
@@ -65,6 +65,7 @@ install_deps() {
     # ── Flathub remote ────────────────────────────────────────────────────────
     step "Ensuring Flathub remote is configured"
     flatpak remote-add --if-not-exists --user flathub \
-        https://flathub.org/repo/flathub.flatpakrepo
+        https://flathub.org/repo/flathub.flatpakrepo \
+        || die "Failed to add Flathub remote. Check network and flatpak installation."
     success "Flathub remote ready"
 }
