@@ -4,6 +4,8 @@ Automated installer for Pokémon TCG Live on Linux via Heroic + Proton-GE.
 
 Works on any Linux distro with Flatpak support (Pop!_OS, Arch, Fedora, openSUSE, Ubuntu, Debian…).
 
+Based on: https://www.reddit.com/r/PTCGL/comments/1q05iny/guide_how_to_install_and_login_to_pokemon_tcg/
+
 ## Requirements
 
 - A Linux distro with `flatpak` available (or the script will install it)
