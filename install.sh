@@ -43,6 +43,7 @@ if [[ -z "$MSI_PATH" ]]; then
         info "Found MSI at ${MSI_PATH}"
     else
         read -rp "Enter full path to PokemonTCGLiveInstaller.msi: " MSI_PATH
+        MSI_PATH="${MSI_PATH/#\~/$HOME}"
     fi
 fi
 
