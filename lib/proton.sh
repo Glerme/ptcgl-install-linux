@@ -23,10 +23,11 @@ install_proton_ge() {
     export PROTON_VERSION
 
     local tar_url
-    tar_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url' | head -1) \
-        || die "Failed to find .tar.gz asset in Proton-GE release."
+    tar_url=$(echo "$release_json" | jq -r --arg name "${PROTON_VERSION}.tar.gz" \
+    '.assets[] | select(.name == $name) | .browser_download_url') \
+    || die "Failed to find ${PROTON_VERSION}.tar.gz asset in Proton-GE release."
     [[ -z "$tar_url" || "$tar_url" == "null" ]] \
-        && die "No .tar.gz download URL found in Proton-GE release assets."
+        && die "No exact-match ${PROTON_VERSION}.tar.gz download URL found in Proton-GE release assets."
 
     local proton_dir="${HEROIC_TOOLS}/${PROTON_VERSION}"
 
