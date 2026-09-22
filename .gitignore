@@ -1,0 +1,10 @@
+# Stray game files that land here if the game (or its bundled updater) is ever
+# launched with this repo as the working directory instead of the Wine prefix's
+# install dir — see launch.sh / register-handler.sh cwd fix.
+/D3D12/
+/MonoBleedingEdge/
+/Pokemon TCG Live.exe
+/Pokemon TCG Live_BurstDebugInformation_DoNotShip/
+/Pokemon TCG Live_Data/
+/PokemonTCGLiveInstaller.msi
+/UnityPlayer.dll

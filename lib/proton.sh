@@ -16,17 +16,35 @@ install_proton_ge() {
     release_json=$(curl -fsSL "$api_url") \
         || die "Failed to fetch Proton-GE release info. Check internet connection."
 
-    PROTON_VERSION=$(echo "$release_json" | jq -r '.tag_name') \
+    local release_tag
+    release_tag=$(echo "$release_json" | jq -r '.tag_name') \
         || die "Failed to parse Proton-GE version from GitHub API response."
-    [[ -z "$PROTON_VERSION" || "$PROTON_VERSION" == "null" ]] \
-        && die "Unexpected .tag_name value from GitHub API: '${PROTON_VERSION}'"
+    [[ -z "$release_tag" || "$release_tag" == "null" ]] \
+        && die "Unexpected .tag_name value from GitHub API: '${release_tag}'"
+
+    # GE-Proton releases publish one tarball per architecture
+    # (e.g. GE-Proton11-5-x86_64.tar.gz, GE-Proton11-5-aarch64.tar.gz), and the
+    # archive's top-level directory is named to match (GE-Proton11-5-x86_64/).
+    # Fold the arch suffix into PROTON_VERSION so it stays in sync with the
+    # actual on-disk folder name everywhere downstream (state file, launch.sh,
+    # Heroic's GamesConfig).
+    local host_arch proton_arch
+    host_arch="$(uname -m)"
+    case "$host_arch" in
+        x86_64)  proton_arch="x86_64" ;;
+        aarch64) proton_arch="aarch64" ;;
+        *) die "Unsupported architecture for Proton-GE: ${host_arch}" ;;
+    esac
+    PROTON_VERSION="${release_tag}-${proton_arch}"
     export PROTON_VERSION
 
+    local asset_name="${PROTON_VERSION}.tar.gz"
     local tar_url
-    tar_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url' | head -1) \
-        || die "Failed to find .tar.gz asset in Proton-GE release."
+    tar_url=$(echo "$release_json" | jq -r --arg name "$asset_name" \
+    '.assets[] | select(.name == $name) | .browser_download_url') \
+    || die "Failed to find ${asset_name} asset in Proton-GE release."
     [[ -z "$tar_url" || "$tar_url" == "null" ]] \
-        && die "No .tar.gz download URL found in Proton-GE release assets."
+        && die "No exact-match ${asset_name} download URL found in Proton-GE release assets."
 
     local proton_dir="${HEROIC_TOOLS}/${PROTON_VERSION}"
 

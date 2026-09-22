@@ -19,4 +19,12 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="$FAKE_STEAM_COMPAT"
 export STEAM_COMPAT_DATA_PATH="$PREFIX_PARENT"
 export WINE_CPU_TOPOLOGY="2:0,1"
 
+# The game (and its bundled self-updater, which runs as a child process) writes
+# update payloads to paths relative to the working directory. Without this cd,
+# the process inherits whatever directory the shell was in, and in-app updates
+# get extracted there instead of into the actual install — silently failing to
+# apply and leaving stray files behind. Steam always launches games with cwd
+# set to the install dir; replicate that here.
+cd "$(dirname "$GAME_EXE")" || die "Failed to cd into game install directory."
+
 exec "$PROTON_BIN" run "$GAME_EXE"

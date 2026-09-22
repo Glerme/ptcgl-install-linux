@@ -73,6 +73,16 @@ info "Running MSI installer (this will take 1-3 minutes) ..."
 "$PROTON_BIN" run msiexec /i 'C:\ptcgl_install\installer.msi' /passive /norestart \
     || warn "msiexec returned non-zero — checking if game installed anyway..."
 
+# msiexec under Wine/Proton can hand off to a background installer process and
+# return control here before the files are actually finished being written.
+# Poll briefly instead of checking immediately, to avoid a false-negative
+# "not found" while the install is still finishing on disk.
+wait_secs=0
+until [[ -f "$GAME_EXE" ]] || (( wait_secs >= 60 )); do
+    sleep 2
+    wait_secs=$(( wait_secs + 2 ))
+done
+
 # Verify the exe is in place
 if [[ ! -f "$GAME_EXE" ]]; then
     error "Game exe not found at expected path:"
