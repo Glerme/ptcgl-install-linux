@@ -28,6 +28,10 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="${FAKE_STEAM_COMPAT}"
 export STEAM_COMPAT_DATA_PATH="${PREFIX_PARENT}"
 export WINE_CPU_TOPOLOGY="2:0,1"
 
+# Match Steam's behavior of launching with cwd set to the install dir — see
+# launch.sh for why this matters (relative-path writes by the in-app updater).
+cd "\$(dirname "${GAME_EXE}")" || { echo "[ptcgl-handler] Failed to cd into game install directory" >&2; exit 1; }
+
 exec "${PROTON_BIN}" run "${GAME_EXE}" "\$CALLBACK_URL"
 HANDLER_SCRIPT
 
