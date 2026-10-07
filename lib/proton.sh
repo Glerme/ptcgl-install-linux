@@ -22,15 +22,28 @@ install_proton_ge() {
         && die "Unexpected .tag_name value from GitHub API: '${PROTON_VERSION}'"
     export PROTON_VERSION
 
+    # Since GE-Proton11, releases ship one tarball per arch (e.g. -x86_64, -aarch64).
+    # Prefer the one matching this machine; fall back to an arch-less tarball for older releases.
+    local arch
+    arch=$(uname -m)
     local tar_url
-    tar_url=$(echo "$release_json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url' | head -1) \
+    tar_url=$(echo "$release_json" | jq -r --arg suffix "-${arch}.tar.gz" '
+        [.assets[] | select(.name | endswith(".tar.gz"))]
+        | map(select(.name | endswith($suffix))) + map(select(.name | test("-(x86_64|aarch64)[.]tar[.]gz$") | not))
+        | .[0].browser_download_url // empty') \
         || die "Failed to find .tar.gz asset in Proton-GE release."
-    [[ -z "$tar_url" || "$tar_url" == "null" ]] \
-        && die "No .tar.gz download URL found in Proton-GE release assets."
+    [[ -z "$tar_url" ]] \
+        && die "No .tar.gz download for architecture '${arch}' found in Proton-GE release assets."
+
+    # The extracted directory may carry an arch suffix (GE-Proton11-7-x86_64), so derive it
+    # from the tarball name and use that as PROTON_VERSION (it's also the dir Heroic expects).
+    local tar_name="${tar_url##*/}"
+    PROTON_VERSION="${tar_name%.tar.gz}"
+    export PROTON_VERSION
 
     local proton_dir="${HEROIC_TOOLS}/${PROTON_VERSION}"
 
-    if [[ -d "$proton_dir" ]]; then
+    if [[ -f "${proton_dir}/proton" ]]; then
         success "Proton-GE ${PROTON_VERSION} already installed at ${proton_dir}"
         return 0
     fi
