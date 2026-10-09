@@ -11,12 +11,12 @@ echo -e "${RED}${BOLD}PTCGL Linux Uninstaller${RESET}"
 echo ""
 echo "This will remove:"
 echo "  - Game prefix (Wine/Proton data + game files)"
-echo "  - Heroic sideload library entry"
-echo "  - Heroic game config (GamesConfig/ptcgl.json)"
+echo "  - Lutris library entry"
+echo "  - Lutris game config"
 echo "  - tpcitcgapp:// URI handler"
 echo "  - State file"
 echo ""
-echo -e "${YELLOW}Proton-GE and Heroic itself will NOT be removed (you may want them for other games).${RESET}"
+echo -e "${YELLOW}Proton-GE and Lutris itself will NOT be removed (you may want them for other games).${RESET}"
 echo ""
 confirm "Continue with uninstall?"
 
@@ -26,21 +26,14 @@ if [[ -f "$STATE_FILE" ]]; then
     source "$STATE_FILE"
 fi
 
-# ── Remove Heroic sideload entry ───────────────────────────────────────────────
-step "Removing Heroic sideload entry"
-if [[ -f "$HEROIC_SIDELOAD_LIB" ]]; then
-    jq --arg app "$APP_NAME" '.games = [.games[] | select(.app_name != $app)]' \
-        "$HEROIC_SIDELOAD_LIB" > "${HEROIC_SIDELOAD_LIB}.tmp" \
-        && mv "${HEROIC_SIDELOAD_LIB}.tmp" "$HEROIC_SIDELOAD_LIB"
-    success "Removed ${APP_NAME} from Heroic library"
+# ── Remove only the Lutris entry managed by this installer ──────────────────────
+step "Removing Lutris game entry"
+if flatpak info "$LUTRIS_FLATPAK" &>/dev/null; then
+    lutris_helper remove --slug "$APP_NAME" --config-id "$LUTRIS_CONFIG_ID" \
+        || die "Could not remove the Lutris entry. Reopen Lutris and try again."
+    success "Removed ${APP_NAME} from Lutris"
 else
-    info "Heroic sideload library not found — skipping"
-fi
-
-GAME_CONFIG_FILE="${HEROIC_GAMES_CONFIG}/${APP_NAME}.json"
-if [[ -f "$GAME_CONFIG_FILE" ]]; then
-    rm -f "$GAME_CONFIG_FILE"
-    success "Removed ${GAME_CONFIG_FILE}"
+    info "Lutris is not installed — skipping library cleanup"
 fi
 
 # ── Remove URI handler ─────────────────────────────────────────────────────────
@@ -79,14 +72,18 @@ if [[ -d "$STATE_DIR" ]]; then
     success "State dir removed: ${STATE_DIR}"
 fi
 
-# ── Optionally remove Heroic Flatpak ──────────────────────────────────────────
+# ── Optionally remove Lutris Flatpak ──────────────────────────────────────────
 echo ""
-read -rp "Remove Heroic Games Launcher Flatpak? [y/N] " ans
+read -rp "Remove Lutris Flatpak? [y/N] " ans
 if [[ "${ans,,}" =~ ^(y|yes)$ ]]; then
-    if flatpak uninstall --user -y "$HEROIC_FLATPAK" 2>/dev/null; then
-        success "Heroic removed"
+    scope=--user
+    if ! flatpak info --user "$LUTRIS_FLATPAK" &>/dev/null; then
+        scope=--system
+    fi
+    if flatpak uninstall "$scope" -y "$LUTRIS_FLATPAK"; then
+        success "Lutris removed"
     else
-        warn "Could not remove Heroic (may not be installed)"
+        warn "Could not remove Lutris (may not be installed)"
     fi
 fi
 

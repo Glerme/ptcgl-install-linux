@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Main installer for Pokémon TCG Live on Linux.
+# Install Pokémon TCG Live with Lutris Flatpak and Proton-GE.
 # Usage: ./install.sh [/path/to/PokemonTCGLiveInstaller.msi]
 
 set -euo pipefail
@@ -9,164 +9,95 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/deps.sh"
 source "${SCRIPT_DIR}/lib/proton.sh"
 
-# ── 1. Dependency check ────────────────────────────────────────────────────────
+# Reuse an existing prefix, including installations made with the old launcher.
+if [[ -f "$STATE_FILE" ]]; then
+    # shellcheck source=/dev/null
+    source "$STATE_FILE"
+    set_prefix_paths
+fi
+
+# Validate the MSI before installing dependencies. Existing games need no MSI.
+MSI_PATH="${1:-}"
+if [[ ! -f "$GAME_EXE" ]]; then
+    step "Locating MSI installer"
+    if [[ -z "$MSI_PATH" ]]; then
+        if [[ -f "${HOME}/Downloads/PokemonTCGLiveInstaller.msi" ]]; then
+            MSI_PATH="${HOME}/Downloads/PokemonTCGLiveInstaller.msi"
+        else
+            read -rp "Enter full path to PokemonTCGLiveInstaller.msi: " MSI_PATH
+        fi
+    fi
+    MSI_PATH="${MSI_PATH/#\~/$HOME}"
+    [[ -f "$MSI_PATH" ]] || die "MSI not found at: ${MSI_PATH}"
+    [[ "${MSI_PATH,,}" == *.msi ]] || die "File does not appear to be an MSI: ${MSI_PATH}"
+fi
+
 install_deps
 
-# ── 2. Install Heroic via Flatpak ─────────────────────────────────────────────
-step "Installing Heroic Games Launcher (Flatpak)"
-if flatpak info --user "$HEROIC_FLATPAK" &>/dev/null; then
-    success "Heroic already installed"
+step "Installing Lutris (Flatpak)"
+if flatpak info --user "$LUTRIS_FLATPAK" &>/dev/null; then
+    success "Lutris already installed for this user"
+elif flatpak info --system "$LUTRIS_FLATPAK" &>/dev/null; then
+    success "Lutris already installed system-wide"
 else
-    flatpak install --user -y flathub "$HEROIC_FLATPAK" \
-        || die "Failed to install Heroic via Flatpak."
-    success "Heroic installed"
+    flatpak install --user -y flathub "$LUTRIS_FLATPAK" \
+        || die "Failed to install Lutris via Flatpak."
 fi
 
-# Ensure Heroic config dirs exist (Heroic creates them on first GUI launch,
-# but we need them now for our scripts).
-mkdir -p "$HEROIC_CONFIG" "$HEROIC_TOOLS" "$HEROIC_GAMES_CONFIG" \
-    "$(dirname "$HEROIC_SIDELOAD_LIB")"
+step "Preparing Lutris's UMU runtime"
+lutris_helper ensure-umu \
+    || die "Could not prepare Lutris's UMU runtime. See the diagnostic above."
+# Ask Lutris for the actual runner directory (respects its custom settings).
+LUTRIS_TOOLS=$(lutris_helper wine-dir) \
+    || die "Could not locate Lutris's Wine runners directory."
+[[ "$LUTRIS_TOOLS" == /* ]] || die "Invalid Lutris runners directory: ${LUTRIS_TOOLS}"
+install_proton_ge
+PROTON_ROOT="${LUTRIS_TOOLS}/${PROTON_VERSION}"
 
-# ── 3. Download Proton-GE-Latest ───────────────────────────────────────────────
-install_proton_ge  # sets and exports PROTON_VERSION
-PROTON_ROOT="${HEROIC_TOOLS}/${PROTON_VERSION}"
-PROTON_BIN="${PROTON_ROOT}/proton"
-
-# ── 4. Locate MSI installer ────────────────────────────────────────────────────
-step "Locating MSI installer"
-MSI_PATH="${1:-}"
-
-if [[ -z "$MSI_PATH" ]]; then
-    local_msi="${HOME}/Downloads/PokemonTCGLiveInstaller.msi"
-    if [[ -f "$local_msi" ]]; then
-        MSI_PATH="$local_msi"
-        info "Found MSI at ${MSI_PATH}"
-    else
-        read -rp "Enter full path to PokemonTCGLiveInstaller.msi: " MSI_PATH
-        MSI_PATH="${MSI_PATH/#\~/$HOME}"
-    fi
+step "Installing game in the Wine prefix"
+if [[ -f "$GAME_EXE" ]]; then
+    success "Reusing existing game: ${GAME_EXE}"
+else
+    mkdir -p "$WINE_PREFIX"
+    MSI_STAGING="${WINE_PREFIX}/drive_c/ptcgl_install"
+    mkdir -p "$MSI_STAGING"
+    cp "$MSI_PATH" "${MSI_STAGING}/installer.msi"
+    info "Running MSI installer with Lutris's UMU runtime..."
+    lutris_helper run --proton-root "$PROTON_ROOT" --prefix "$WINE_PREFIX" \
+        msiexec /i 'C:\ptcgl_install\installer.msi' /passive /norestart \
+        || warn "msiexec returned non-zero — checking the installed executable."
+    [[ -f "$GAME_EXE" ]] \
+        || die "Game executable not found: ${GAME_EXE}\nCheck the MSI installation inside ${WINE_PREFIX}/drive_c/."
+    rm -rf "$MSI_STAGING"
+    success "Game installed: ${GAME_EXE}"
 fi
 
-[[ -f "$MSI_PATH" ]] || die "MSI not found at: ${MSI_PATH}"
-[[ "${MSI_PATH,,}" == *.msi ]] || die "File does not appear to be an MSI: ${MSI_PATH}"
-success "Using MSI: ${MSI_PATH}"
+step "Registering game in Lutris"
+lutris_helper register --slug "$APP_NAME" --config-id "$LUTRIS_CONFIG_ID" \
+    --title "$GAME_TITLE" --version "$PROTON_VERSION" --proton-root "$PROTON_ROOT" \
+    --prefix "$WINE_PREFIX" --exe "$GAME_EXE" \
+    || die "Failed to register the game in Lutris."
+success "Game registered. Reopen Lutris if it was already running."
 
-# ── 5. Initialize Wine prefix + install game ───────────────────────────────────
-step "Setting up Wine prefix and installing game"
-
-mkdir -p "$PREFIX_PARENT" "$FAKE_STEAM_COMPAT"
-
-export STEAM_COMPAT_CLIENT_INSTALL_PATH="$FAKE_STEAM_COMPAT"
-export STEAM_COMPAT_DATA_PATH="$PREFIX_PARENT"
-
-# First proton invocation initializes the prefix (creates pfx/, sets up DXVK/VKD3D).
-info "Initializing Wine prefix with Proton-GE ${PROTON_VERSION} ..."
-"$PROTON_BIN" run wineboot --init \
-    || warn "wineboot --init returned non-zero (often harmless; continuing)"
-
-# Copy MSI into the prefix so msiexec can find it at a Windows path (C:\)
-MSI_STAGING="${WINE_PREFIX}/drive_c/ptcgl_install"
-mkdir -p "$MSI_STAGING"
-cp "$MSI_PATH" "${MSI_STAGING}/installer.msi"
-
-info "Running MSI installer (this will take 1-3 minutes) ..."
-"$PROTON_BIN" run msiexec /i 'C:\ptcgl_install\installer.msi' /passive /norestart \
-    || warn "msiexec returned non-zero — checking if game installed anyway..."
-
-# Verify the exe is in place
-if [[ ! -f "$GAME_EXE" ]]; then
-    error "Game exe not found at expected path:"
-    error "  ${GAME_EXE}"
-    error ""
-    error "Possible causes:"
-    error "  1. MSI install failed silently — try without /passive (run manually)."
-    error "  2. Game installed to a different path — check inside ${WINE_PREFIX}/drive_c/"
-    die "Installation verification failed."
-fi
-success "Game installed: ${GAME_EXE}"
-
-# Cleanup staging dir
-rm -rf "$MSI_STAGING"
-
-# ── 6. Write Heroic sideload entry ────────────────────────────────────────────
-step "Registering game in Heroic"
-
-# library.json must be valid JSON with .games array
-if [[ ! -f "$HEROIC_SIDELOAD_LIB" ]] || ! jq -e '.games' "$HEROIC_SIDELOAD_LIB" &>/dev/null; then
-    echo '{"games": []}' > "$HEROIC_SIDELOAD_LIB"
-fi
-
-# Remove any existing entry for this app to avoid duplicates
-jq --arg app "$APP_NAME" '.games = [.games[] | select(.app_name != $app)]' \
-    "$HEROIC_SIDELOAD_LIB" > "${HEROIC_SIDELOAD_LIB}.tmp" \
-    && mv "${HEROIC_SIDELOAD_LIB}.tmp" "$HEROIC_SIDELOAD_LIB"
-
-# Add fresh entry
-jq --arg app "$APP_NAME" \
-   --arg title "$GAME_TITLE" \
-   --arg exe "$GAME_EXE" \
-   '.games += [{
-       "runner": "sideload",
-       "app_name": $app,
-       "title": $title,
-       "art_cover": "",
-       "art_square": "",
-       "art_background": "",
-       "is_installed": true,
-       "install": { "executable": $exe, "platform": "Windows" },
-       "canRunOffline": true
-   }]' \
-    "$HEROIC_SIDELOAD_LIB" > "${HEROIC_SIDELOAD_LIB}.tmp" \
-    && mv "${HEROIC_SIDELOAD_LIB}.tmp" "$HEROIC_SIDELOAD_LIB"
-
-success "Sideload entry added to Heroic library"
-
-# GamesConfig/<app_name>.json — wine version + env vars for Heroic launcher
-GAME_CONFIG_FILE="${HEROIC_GAMES_CONFIG}/${APP_NAME}.json"
-cat > "$GAME_CONFIG_FILE" <<EOF
-{
-  "${APP_NAME}": {
-    "wineVersion": {
-      "bin": "${PROTON_BIN}",
-      "name": "${PROTON_VERSION}",
-      "type": "proton",
-      "dir": "${PROTON_ROOT}/"
-    },
-    "winePrefix": "${PREFIX_PARENT}",
-    "enviromentOptions": [
-      { "key": "WINE_CPU_TOPOLOGY", "value": "2:0,1" },
-      { "key": "STEAM_COMPAT_CLIENT_INSTALL_PATH", "value": "${FAKE_STEAM_COMPAT}" }
-    ],
-    "launcherArgs": ""
-  }
-}
-EOF
-success "Heroic game config written: ${GAME_CONFIG_FILE}"
-
-# ── 7. Write state file ────────────────────────────────────────────────────────
 step "Saving install state"
-mkdir -p "$STATE_DIR"
-cat > "$STATE_FILE" <<EOF
-# Generated by install.sh — do not edit manually
-PROTON_VERSION="${PROTON_VERSION}"
-PREFIX_PARENT="${PREFIX_PARENT}"
-EOF
-success "State file written: ${STATE_FILE}"
+mkdir -p "${STATE_DIR}/lib"
+# Install an independent launcher so the URI handler survives moving this repo.
+cp "${SCRIPT_DIR}/launch.sh" "${STATE_DIR}/launch.sh"
+cp "${SCRIPT_DIR}/lib/common.sh" "${SCRIPT_DIR}/lib/lutris_bridge.py" \
+    "${SCRIPT_DIR}/lib/callback.py" "${STATE_DIR}/lib/"
+{
+    echo '# Generated by install.sh'
+    printf 'LAUNCHER=%q\n' lutris
+    printf 'PROTON_VERSION=%q\n' "$PROTON_VERSION"
+    printf 'PROTON_ROOT=%q\n' "$PROTON_ROOT"
+    printf 'PREFIX_PARENT=%q\n' "$PREFIX_PARENT"
+} > "$STATE_FILE"
+success "State saved: ${STATE_FILE}"
 
-# ── 8. Register URI handler ────────────────────────────────────────────────────
-step "Registering tpcitcgapp:// URI handler"
-"${SCRIPT_DIR}/register-handler.sh" \
-    || warn "URI handler registration failed — login will require manual steps."
+"${SCRIPT_DIR}/register-handler.sh"
 
-# ── Done ───────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}${BOLD}════════════════════════════════════════${RESET}"
-echo -e "${GREEN}${BOLD}  PTCGL installed successfully!${RESET}"
-echo -e "${GREEN}${BOLD}════════════════════════════════════════${RESET}"
-echo ""
-echo -e "  Launch via Heroic:  ${BOLD}flatpak run ${HEROIC_FLATPAK}${RESET}"
-echo -e "  Launch directly:    ${BOLD}./launch.sh${RESET}"
-echo ""
-echo -e "  First-time login: click 'Login' in game, complete in browser."
-echo -e "  The auth callback is handled automatically."
-echo ""
+success "PTCGL installed successfully!"
+info "Launch: ./launch.sh (or open Lutris and click Play)"
+info "Direct launch using Lutris's UMU runtime: ./launch.sh --direct"
+info "Complete login in the browser and allow the tpcitcgapp:// callback."

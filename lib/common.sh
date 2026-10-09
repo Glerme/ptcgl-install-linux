@@ -18,25 +18,16 @@ error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 die()     { error "$*"; exit 1; }
 step()    { echo -e "\n${BOLD}▶ $*${RESET}"; }
 
-# ── Heroic Flatpak constants ───────────────────────────────────────────────────
-HEROIC_FLATPAK="com.heroicgameslauncher.hgl"
-HEROIC_CONFIG="${HOME}/.var/app/${HEROIC_FLATPAK}/config/heroic"
-HEROIC_TOOLS="${HEROIC_CONFIG}/tools/proton"
-HEROIC_GAMES_CONFIG="${HEROIC_CONFIG}/GamesConfig"
-HEROIC_SIDELOAD_LIB="${HEROIC_CONFIG}/sideload_apps/library.json"
+# ── Lutris Flatpak constants ───────────────────────────────────────────────────
+LUTRIS_FLATPAK="net.lutris.Lutris"
+LUTRIS_CONFIG_ID="ptcgl-linux"
 
 # ── Game / prefix constants ────────────────────────────────────────────────────
 GAME_TITLE="Pokemon TCG Live"
 APP_NAME="ptcgl"
-# Heroic default prefix location (STEAM_COMPAT_DATA_PATH for proton runners)
-PREFIX_PARENT="${HOME}/Games/Heroic/Prefixes/default/${GAME_TITLE}"
-# Proton creates pfx/ inside PREFIX_PARENT as the actual Wine prefix
+PREFIX_PARENT="${HOME}/Games/Lutris/pokemon-tcg-live"
 WINE_PREFIX="${PREFIX_PARENT}/pfx"
-# Actual game executable path inside the Wine prefix
-# NOTE: path contains spaces — always use "$GAME_EXE" (double-quoted) at call sites
 GAME_EXE="${WINE_PREFIX}/drive_c/users/steamuser/The Pokémon Company International/Pokémon Trading Card Game Live/Pokemon TCG Live.exe"
-# Windows-style path used when calling msiexec (C:\ root)
-MSI_INSTALL_DIR_WIN='C:\ptcgl_install'
 
 # ── URI handler constants ──────────────────────────────────────────────────────
 HANDLER_BIN="${HOME}/.local/bin/ptcgl-uri-handler"
@@ -45,9 +36,6 @@ HANDLER_DESKTOP="${HOME}/.local/share/applications/ptcgl-handler.desktop"
 # ── State file (written by install.sh, sourced by other scripts) ───────────────
 STATE_DIR="${HOME}/.config/ptcgl-linux"
 STATE_FILE="${STATE_DIR}/state"
-
-# ── Fake Steam compat dir (Proton needs this env var to exist) ─────────────────
-FAKE_STEAM_COMPAT="${STATE_DIR}/steam-compat"
 
 # ── Utility functions ──────────────────────────────────────────────────────────
 
@@ -71,17 +59,24 @@ confirm() {
     [[ "${ans,,}" =~ ^(y|yes)$ ]] || { info "Aborted."; exit 0; }
 }
 
-# load_state — sources STATE_FILE; dies with helpful message if not installed.
-# Re-derives all paths that depend on PREFIX_PARENT so that scripts work
-# even if the prefix was moved (or if common.sh defaults differ from saved state).
+# Keep all prefix-dependent paths in sync, including when migrating an old install.
+set_prefix_paths() {
+    WINE_PREFIX="${PREFIX_PARENT}/pfx"
+    GAME_EXE="${WINE_PREFIX}/drive_c/users/steamuser/The Pokémon Company International/Pokémon Trading Card Game Live/Pokemon TCG Live.exe"
+}
+
 load_state() {
     [[ -f "$STATE_FILE" ]] || die "State file not found at $STATE_FILE. Run ./install.sh first."
     # shellcheck source=/dev/null
     source "$STATE_FILE"
-    PROTON_ROOT="${HEROIC_TOOLS}/${PROTON_VERSION}"
+    [[ "${LAUNCHER:-}" == lutris ]] \
+        || die "This installation uses the old launcher. Run ./install.sh to migrate to Lutris."
+    set_prefix_paths
     PROTON_BIN="${PROTON_ROOT}/proton"
-    # Re-derive downstream paths in case PREFIX_PARENT was overridden by state file
-    WINE_PREFIX="${PREFIX_PARENT}/pfx"
-    # NOTE: path contains spaces — always use "$GAME_EXE" (double-quoted) at call sites
-    GAME_EXE="${WINE_PREFIX}/drive_c/users/steamuser/The Pokémon Company International/Pokémon Trading Card Game Live/Pokemon TCG Live.exe"
+}
+
+# Execute helpers with the Python in the Lutris Flatpak and its UMU runtime.
+lutris_helper() {
+    flatpak run --command=python3 "$LUTRIS_FLATPAK" \
+        "${SCRIPT_DIR}/lib/lutris_bridge.py" "$@"
 }
