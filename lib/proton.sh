@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Downloads Proton-GE-Latest from GitHub and extracts it into Heroic's tools dir.
+# Downloads Proton-GE-Latest from GitHub and extracts it into Lutris's Wine runners directory.
 # After calling install_proton_ge(), PROTON_VERSION is set and exported.
 # Sourced by install.sh — do not call directly.
 
@@ -36,12 +36,12 @@ install_proton_ge() {
         && die "No .tar.gz download for architecture '${arch}' found in Proton-GE release assets."
 
     # The extracted directory may carry an arch suffix (GE-Proton11-7-x86_64), so derive it
-    # from the tarball name and use that as PROTON_VERSION (it's also the dir Heroic expects).
+    # from the tarball name and use that as PROTON_VERSION (it's also the runner directory Lutris discovers).
     local tar_name="${tar_url##*/}"
     PROTON_VERSION="${tar_name%.tar.gz}"
     export PROTON_VERSION
 
-    local proton_dir="${HEROIC_TOOLS}/${PROTON_VERSION}"
+    local proton_dir="${LUTRIS_TOOLS}/${PROTON_VERSION}"
 
     if [[ -f "${proton_dir}/proton" ]]; then
         success "Proton-GE ${PROTON_VERSION} already installed at ${proton_dir}"
@@ -49,7 +49,7 @@ install_proton_ge() {
     fi
 
     info "Downloading ${PROTON_VERSION}..."
-    mkdir -p "$HEROIC_TOOLS"
+    mkdir -p "$LUTRIS_TOOLS"
 
     local tmp_tar
     tmp_tar=$(mktemp --suffix=".tar.gz")
@@ -59,8 +59,8 @@ install_proton_ge() {
     curl -fSL --progress-bar "$tar_url" -o "$tmp_tar" \
         || die "Download failed for $tar_url"
 
-    info "Extracting to ${HEROIC_TOOLS}/ ..."
-    tar -xf "$tmp_tar" -C "$HEROIC_TOOLS/" \
+    info "Extracting to ${LUTRIS_TOOLS}/ ..."
+    tar -xf "$tmp_tar" -C "$LUTRIS_TOOLS/" \
         || die "Extraction failed."
 
     [[ -f "${proton_dir}/proton" ]] \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs system dependencies: flatpak and jq.
+# Installs dependencies for Lutris Flatpak, Proton downloads, and URI registration.
 # Sourced by install.sh — do not call directly.
 # Expects: success(), warn(), die(), step(), require_cmd() from common.sh are already loaded.
 
@@ -61,6 +61,12 @@ install_deps() {
     # ── tar ───────────────────────────────────────────────────────────────────
     require_cmd tar "Please install tar manually."
     success "tar present"
+
+    if ! command -v xdg-mime &>/dev/null; then
+        warn "xdg-mime not found — installing xdg-utils..."
+        _install_pkg xdg-utils
+    fi
+    require_cmd xdg-mime
 
     # ── Flathub remote ────────────────────────────────────────────────────────
     step "Ensuring Flathub remote is configured"
