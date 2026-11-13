@@ -25,6 +25,13 @@ HEROIC_TOOLS="${HEROIC_CONFIG}/tools/proton"
 HEROIC_GAMES_CONFIG="${HEROIC_CONFIG}/GamesConfig"
 HEROIC_SIDELOAD_LIB="${HEROIC_CONFIG}/sideload_apps/library.json"
 
+# ── Lutris Flatpak constants ───────────────────────────────────────────────────
+LUTRIS_FLATPAK="net.lutris.Lutris"
+LUTRIS_DATA="${HOME}/.var/app/${LUTRIS_FLATPAK}/data/lutris"
+LUTRIS_PROTON_TOOLS="${LUTRIS_DATA}/runners/proton"
+# Verified with lutris.settings inside the Flatpak: CONFIG_DIR == DATA_DIR.
+LUTRIS_GAMES_DIR="${LUTRIS_DATA}/games"
+
 # ── Game / prefix constants ────────────────────────────────────────────────────
 GAME_TITLE="Pokemon TCG Live"
 APP_NAME="ptcgl"
@@ -76,9 +83,11 @@ confirm() {
 # even if the prefix was moved (or if common.sh defaults differ from saved state).
 load_state() {
     [[ -f "$STATE_FILE" ]] || die "State file not found at $STATE_FILE. Run ./install.sh first."
+    unset LAUNCHER PROTON_ROOT
     # shellcheck source=/dev/null
     source "$STATE_FILE"
-    PROTON_ROOT="${HEROIC_TOOLS}/${PROTON_VERSION}"
+    LAUNCHER="${LAUNCHER:-heroic}"
+    PROTON_ROOT="${PROTON_ROOT:-${HEROIC_TOOLS}/${PROTON_VERSION}}"
     PROTON_BIN="${PROTON_ROOT}/proton"
     # Re-derive downstream paths in case PREFIX_PARENT was overridden by state file
     WINE_PREFIX="${PREFIX_PARENT}/pfx"
