@@ -13,10 +13,11 @@ echo "This will remove:"
 echo "  - Game prefix (Wine/Proton data + game files)"
 echo "  - Heroic sideload library entry"
 echo "  - Heroic game config (GamesConfig/ptcgl.json)"
+echo "  - Lutris game config and library entry"
 echo "  - tpcitcgapp:// URI handler"
 echo "  - State file"
 echo ""
-echo -e "${YELLOW}Proton-GE and Heroic itself will NOT be removed (you may want them for other games).${RESET}"
+echo -e "${YELLOW}Proton-GE, Lutris and Heroic itself will NOT be removed (you may want them for other games).${RESET}"
 echo ""
 confirm "Continue with uninstall?"
 
@@ -41,6 +42,19 @@ GAME_CONFIG_FILE="${HEROIC_GAMES_CONFIG}/${APP_NAME}.json"
 if [[ -f "$GAME_CONFIG_FILE" ]]; then
     rm -f "$GAME_CONFIG_FILE"
     success "Removed ${GAME_CONFIG_FILE}"
+fi
+
+# ── Remove Lutris entry ────────────────────────────────────────────────────────
+step "Removing Lutris entry"
+if [[ -f "$LUTRIS_DATA/pga.db" ]]; then
+    require_cmd sqlite3 "Please install sqlite3 and re-run."
+    sqlite3 -cmd '.timeout 5000' "$LUTRIS_DATA/pga.db" \
+        "DELETE FROM games WHERE configpath = '$APP_NAME';" \
+        || die "Failed to remove Lutris library entry."
+fi
+if [[ -f "$LUTRIS_GAMES_DIR/$APP_NAME.yml" ]]; then
+    rm -f "$LUTRIS_GAMES_DIR/$APP_NAME.yml"
+    success "Removed Lutris game config"
 fi
 
 # ── Remove URI handler ─────────────────────────────────────────────────────────
