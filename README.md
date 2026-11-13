@@ -49,6 +49,9 @@ copy the `tpcitcgapp://callback?code=...` URL from the console, then run:
 ~/.local/bin/ptcgl-uri-handler "tpcitcgapp://callback?code=..."
 ```
 
+Using Steam, Heroic or Lutris without this installer and getting a second game window on login?
+See the manual callback guide: [English](docs/manual-login-callback.md) | [Português (BR)](docs/manual-login-callback.pt-BR.md).
+
 ## Scripts
 
 | Script | Purpose |
