@@ -24,11 +24,30 @@ set -euo pipefail
 CALLBACK_URL="\${1:-}"
 [[ -n "\$CALLBACK_URL" ]] || { echo "[ptcgl-handler] No URL provided" >&2; exit 1; }
 
+LOG_FILE="\${HOME}/.config/ptcgl-linux/handler.log"
+mkdir -p "\$(dirname "\$LOG_FILE")"
+
+# Prefer the wine game process (Windows path, C:\\...) over the proton launcher script:
+# flatpak enter copies the target's environment (WINEFSYNC etc.), so it must be the game.
+pid=\$(pgrep -of '[\\\\]Pokemon TCG Live[.]exe' || pgrep -of 'Pokemon TCG Live.exe' || true)
+if [[ -n "\$pid" && -e "/proc/\$pid/root/.flatpak-info" ]]; then
+    status=0
+    flatpak enter "\$pid" env WINEPREFIX="${WINE_PREFIX}" \\
+        "${PROTON_ROOT}/files/bin/wine" "${GAME_EXE}" "\$CALLBACK_URL" || status=\$?
+    printf '%s flatpak-enter pid=%s exit=%s\\n' "\$(date -Is)" "\$pid" "\$status" >> "\$LOG_FILE"
+    if [[ "\$status" -ne 126 && "\$status" -ne 127 ]]; then
+        exit "\$status"
+    fi
+fi
+
 export STEAM_COMPAT_CLIENT_INSTALL_PATH="${FAKE_STEAM_COMPAT}"
 export STEAM_COMPAT_DATA_PATH="${PREFIX_PARENT}"
 export WINE_CPU_TOPOLOGY="2:0,1"
 
-exec "${PROTON_BIN}" run "${GAME_EXE}" "\$CALLBACK_URL"
+status=0
+(exec "${PROTON_BIN}" run "${GAME_EXE}" "\$CALLBACK_URL") || status=\$?
+printf '%s host-proton exit=%s\\n' "\$(date -Is)" "\$status" >> "\$LOG_FILE"
+exit "\$status"
 HANDLER_SCRIPT
 
 chmod +x "$HANDLER_BIN"
